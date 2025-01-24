@@ -98,16 +98,22 @@ export function Prescription() {
       <CardContent className="space-y-4">
         {isCameraActive ? (
           <div className="relative aspect-[4/3] overflow-hidden rounded-lg">
-            <Webcam
-              ref={webcamRef}
-              audio={false}
-              screenshotFormat="image/jpeg"
-              videoConstraints={{
-                facingMode,
-                aspectRatio: 4 / 3,
-              }}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            {isProcessing ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75">
+                <span>Processing...</span>
+              </div>
+            ) : (
+              <Webcam
+                ref={webcamRef}
+                audio={false}
+                screenshotFormat="image/jpeg"
+                videoConstraints={{
+                  facingMode,
+                  aspectRatio: 4 / 3,
+                }}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
           </div>
         ) : (
           <div className="aspect-[4/3] flex items-center justify-center rounded-lg border-2 border-dashed">
@@ -115,12 +121,14 @@ export function Prescription() {
           </div>
         )}
 
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="mt-4"
-        />
+        {process.env.NODE_ENV !== "production" && (
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="mt-4"
+          />
+        )}
 
         {validationResult && (
           <Alert variant={validationResult.isValid ? "default" : "destructive"}>
