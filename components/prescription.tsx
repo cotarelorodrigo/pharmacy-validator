@@ -25,6 +25,8 @@ export function Prescription() {
     "environment"
   );
 
+  console.log("V::", validationResult);
+
   const toggleCamera = useCallback(() => {
     setIsCameraActive((prev) => !prev);
     setValidationResult(null);
@@ -53,6 +55,33 @@ export function Prescription() {
       setIsProcessing(false);
     }
   }, []);
+
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        setIsProcessing(true);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const imageSrc = e.target?.result as string;
+          const result = await validatePrescription(imageSrc);
+          console.log("RFILE::", result);
+          setValidationResult(result);
+        };
+        reader.readAsDataURL(file);
+      } catch {
+        setValidationResult({
+          isValid: false,
+          details: "Error processing image. Please try again.",
+        });
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    []
+  );
 
   return (
     <Card>
@@ -85,6 +114,13 @@ export function Prescription() {
             <Camera className="h-8 w-8 text-muted-foreground" />
           </div>
         )}
+
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="mt-4"
+        />
 
         {validationResult && (
           <Alert variant={validationResult.isValid ? "default" : "destructive"}>

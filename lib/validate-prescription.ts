@@ -1,42 +1,57 @@
 "use server";
-import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import OpenAI from "openai";
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod";
+
+const openai = new OpenAI();
+
+const PrescriptionValidationSchema = z.object({
+  isValid: z.boolean(),
+  details: z.string().optional(),
+});
 
 export async function validatePrescription(imageBase64: string): Promise<{
   isValid: boolean;
   details?: string;
 }> {
   try {
-    const imageData = imageBase64.split(",")[1]; // Remove data URL prefix
+    const imageData = `data:image/jpeg;base64,${imageBase64.split(",")[1]}`; // Construct the data URL
 
-    const result = await streamText({
-      model: openai("gpt-4o"),
+    const completion = await openai.beta.chat.completions.parse({
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Validate this prescription. Check if: 1) The medication name is clear and complete 2) The prescription date is valid 3) All required barcodes are present and readable 4) The prescription is not expired. Return only true or false followed by a brief explanation.",
+              text: 'Eres un asistente experto en análisis de recetas de farmacia. Tu tarea es verificar que las recetas cumplan con las siguientes reglas basadas en las instrucciones proporcionadas:\n\nCoincidencia del troquel con la prescripción:\n\nEl troquel debe coincidir exactamente con el medicamento recetado, incluyendo nombre, cantidad de miligramos y comprimidos.\nSi la receta indica dos cajas, debe haber dos troqueles adheridos.\nDatos completos del afiliado o tercero:\n\nTodos los datos del afiliado o de la persona que retira deben estar presentes (por ejemplo, número de teléfono, documento de identidad, etc.).\nSi algún dato ha sido corregido o remarcado, debe estar "salvado" en el reverso de la receta con una anotación que indique el dato correcto.\nProhibición de correcciones no salvadas:\n\nNo se permiten datos remarcados sin la correspondiente corrección salvada en el reverso.\nControl de cantidades:\n\nVerifica que la cantidad de troqueles coincida con la cantidad de medicamentos indicada en la receta.\nTu objetivo es analizar una receta dada y proporcionar un informe detallado indicando:\n\nCumplimiento o incumplimiento de cada regla.\nErrores específicos detectados y recomendaciones para corregirlos.\n\nEl troquel suele estar a la izquierda de la receta o en los bordes.',
             },
             {
-              type: "image",
-              image: Buffer.from(imageData, "base64"),
+              type: "image_url",
+              image_url: { url: imageData },
             },
           ],
         },
       ],
+      response_format: zodResponseFormat(
+        PrescriptionValidationSchema,
+        "prescription_validation"
+      ),
     });
 
-    let fullText = "";
-    for await (const chunk of result.textStream) {
-      fullText += chunk;
+    const parsed = completion.choices[0].message.parsed;
+    if (!parsed) {
+      return {
+        isValid: false,
+        details: "Failed to parse response",
+      };
     }
 
-    const [validity, ...details] = fullText.split("\n");
+    const { isValid, details } = parsed;
     return {
-      isValid: validity.toLowerCase().includes("true"),
-      details: details.join(" ").trim(),
+      isValid,
+      details: details || "",
     };
   } catch (error) {
     console.error("Error validating prescription:", error);
